@@ -6,6 +6,8 @@ langchain-groq
 langchain-google-genai
 langchain-core
 dotenv
-wikipedia
+wikipedia-api
 duckduckgo-search
 arxiv
+requests
+ddgs

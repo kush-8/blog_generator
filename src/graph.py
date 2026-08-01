@@ -4,8 +4,8 @@ from langgraph.types import interrupt, Command
 from langchain_groq import ChatGroq
 from typing import Literal
 
-from src.state import BlogState, RevisionNotes
-from src.agents import research_agent, editor_agent, writer_agent, get_llm
+from state import BlogState, RevisionNotes
+from agents import research_agent, editor_agent, writer_agent, get_llm
 
 MAX_REVISIONS = 3
 
@@ -18,7 +18,7 @@ def get_feedback_notes(llm: ChatGroq, feedback: str) -> RevisionNotes:
     Feedback: {feedback}
     """
     response = st_llm.invoke(prompt)
-    return response.content
+    return response
 
 def researcher(state: BlogState):
     """
@@ -39,6 +39,7 @@ def research_review(state: BlogState):
     """
     Pause and ask the human for feedback on the research content. If the human approves, continue to the next step. If not, raise an interrupt with the revision notes.
     """
+    print("research_review")
     decision = interrupt({
         "stage": "research_review",
         "research_content": state.research_content,
@@ -70,6 +71,7 @@ def draft_review(state: BlogState):
     """
     Pause and ask the human for feedback on the draft. If the human approves, continue to the next step. If not, raise an interrupt with the revision notes.
     """
+    print("draft_review")
     decision = interrupt({
         "stage": "draft_review",
         "draft": state.draft,

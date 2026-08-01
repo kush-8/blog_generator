@@ -1,12 +1,17 @@
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.tools import tool
-import wikipedia
+import requests
+import wikipediaapi
+import arxiv
 from langchain_community.utilities.wikipedia import WikipediaAPIWrapper
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_community.tools import ArxivQueryRun
 from langchain_community.utilities import ArxivAPIWrapper
 from langchain.agents import create_agent
+from datetime import datetime
+
+year = datetime.now().year
 
 
 def get_llm(model_name: str = "openai/gpt-oss-20b", temperature: float = 0.5):
@@ -15,50 +20,254 @@ def get_llm(model_name: str = "openai/gpt-oss-20b", temperature: float = 0.5):
 
 
 @tool
-def wikipedia_search(query: str) -> str:
+def wikipedia_search(query: str) -> list[dict]:
     """
-    Search Wikipedia for a given query and return a summary of the results.
+    Search Wikipedia and return the top 3 matching pages.
     """
-    wiki = WikipediaAPIWrapper(wiki_client=wikipedia, top_k_results=3)
-    result = wiki.run(query)
-    return result
+    print(f"Searching Wikipedia for: {query}")
+
+    USER_AGENT = "BlogGenerator/1.0 (kushagarsharma731@gmail.com)"
+
+    wiki = wikipediaapi.Wikipedia(
+        language="en",
+        user_agent=USER_AGENT,
+    )
+
+    HEADERS = {
+        "User-Agent": USER_AGENT,
+    }
+
+    response = requests.get(
+        "https://en.wikipedia.org/w/api.php",
+        headers=HEADERS,
+        params={
+            "action": "query",
+            "list": "search",
+            "srsearch": query,
+            "format": "json",
+            "srlimit": 3,
+        },
+        timeout=10,
+    )
+
+    response.raise_for_status()
+
+    search_results = response.json()["query"]["search"]
+
+    pages = []
+
+    for result in search_results:
+        page = wiki.page(result["title"])
+
+        if page.exists():
+            pages.append(
+                {
+                    "title": page.title,
+                    "summary": page.summary,
+                    "url": page.fullurl,
+                }
+            )
+
+    return pages
 
 @tool
 def duckduckgo_search(query: str) -> str:
     """
     Search DuckDuckGo for a given query and return the top results.
     """
+    print(f"Searching DuckDuckGo for: {query}")
     search = DuckDuckGoSearchRun()
     result = search.run(query)
     return result
 
+client = arxiv.Client()
+
 @tool
-def arxiv_search(query: str) -> str:
+def arxiv_search(query: str) -> list[dict]:
     """
-    Search arXiv for a given query and return the top results.
+    Search arXiv and return the top 3 papers.
     """
-    arxiv = ArxivQueryRun(api_wrapper=ArxivAPIWrapper())
-    result = arxiv.run(query)
-    return result
+    print(f"Searching arXiv for: {query}")
+    search = arxiv.Search(
+        query=query,
+        max_results=3,
+        sort_by=arxiv.SortCriterion.Relevance,
+    )
+
+    papers = []
+
+    for paper in client.results(search):
+        papers.append(
+            {
+                "title": paper.title,
+                "authors": [a.name for a in paper.authors],
+                "published": str(paper.published.date()),
+                "summary": paper.summary[:700],
+                "url": paper.entry_id,
+            }
+        )
+
+    return papers
 
 research_tools = [wikipedia_search, duckduckgo_search, arxiv_search]
 
 
 RESEARCHER_PROMPT = """
-    You are a professional research assistant.
+You are an expert Research Analyst for a professional publishing company.
 
-    Given a topic, target audience, and additional instructions, your job is to gather factual, relevant, and reliable information about the topic. 
-    You should use the following tools to gather information:
-    - Wikipedia search tool for background knowledge.
-    - DuckDuckGo search tool for recent developments.
-    - Arxiv search tool for academic papers.
-    Guidelines:
-    - Never write the final article.
-    - Return concise research notes.
-    - Include sources whenever possible.
+Your ONLY responsibility is to collect factual information and produce a structured research report.
+
+You are NOT writing the final article.
+
+=========================
+AVAILABLE TOOLS
+=========================
+
+Wikipedia
+Use for:
+- definitions
+- background
+- history
+- terminology
+
+DuckDuckGo
+Use for:
+- recent developments
+- statistics
+- surveys
+- case studies
+- industry examples
+- government reports
+
+arXiv
+Use for:
+- academic papers
+- scientific findings
+- technical explanations
+
+=========================
+TOOL USAGE RULES
+=========================
+
+Only call a tool when additional information is needed.
+
+You may call the same tool multiple times.
+
+Maximum total tool calls: 6.
+
+Never call tools unnecessarily.
+
+If sufficient information has already been collected,
+produce the final report.
+
+=========================
+IMPORTANT
+=========================
+
+DO NOT output your reasoning.
+
+DO NOT explain your research process.
+
+DO NOT write things like:
+
+- "I'll search..."
+- "Let's look up..."
+- "I need more information..."
+- "I'll now use Wikipedia..."
+- "Next I'll search..."
+
+Your response must ALWAYS be one of the following:
+
+1. A valid tool call
+
+OR
+
+2. The final research report
+
+Never output planning text.
+
+=========================
+RESEARCH OBJECTIVES
+=========================
+
+Gather enough information for a professional blog article.
+
+Collect:
+
+- definitions
+- background
+- important concepts
+- latest developments
+- statistics
+- academic evidence
+- practical examples
+- benefits
+- challenges
+- ethical concerns
+- future outlook
+- actionable recommendations
+
+Prefer evidence over opinions.
+
+When possible include:
+
+- publication year
+- organization
+- survey numbers
+- percentages
+- paper titles
+
+=========================
+OUTPUT FORMAT
+=========================
+
+# Executive Summary
+
+# Background
+
+# Key Concepts
+
+# Current Trends
+
+# Statistics & Data
+
+# Academic Research
+
+# Industry Examples
+
+# Benefits
+
+# Challenges
+
+# Ethical Considerations
+
+# Future Outlook
+
+# Practical Recommendations
+
+# References
+
+=========================
+QUALITY
+=========================
+
+The report should be:
+
+- factual
+- well-organized
+- comprehensive
+- concise
+- evidence-based
+- neutral
+
+Never invent facts.
+
+If sources disagree, mention both viewpoints.
+
+Cite every important claim with its source.
 """
 
-def research_agent(llm: ChatGroq, topic: str, audience: str, human_feedback: str = "") -> str:
+def research_agent(llm: ChatGroq, topic: str, audience: str, human_feedback: str = "", year: int = year) -> str:
     """
     Research agent that generates a research report based on the given topic and target audience.
     """
@@ -76,7 +285,20 @@ def research_agent(llm: ChatGroq, topic: str, audience: str, human_feedback: str
             "messages": [
                 {
                     "role": "user",
-                    "content": f"Topic: {topic}\nTarget Audience: {audience}\n {human_feedback}"
+                    "content": f"""Topic:
+                                    {topic}
+
+                                    Audience:
+                                    {audience}
+
+                                    Your task:
+
+                                    1. Collect enough factual information for an 800–1200 word article.
+                                    2. Use tools only when needed.
+                                    3. Use at most 6 tool calls.
+                                    4. Do not reveal your reasoning.
+                                    5. Return only the final research report.
+                                    Prioritize information from {year} whenever possible."""
                 }
             ]
         }
