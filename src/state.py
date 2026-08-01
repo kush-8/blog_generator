@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 class BlogState(BaseModel):
     # User input fields
     topic: str = Field(description="The topic of the blog post")
-    audience: str = Field(description="The target audience of the blog post")
+    audience: str = Field(description="The target audience of the blog post", default="general public")
 
     # research fields
     research_content: str = Field(default="", description="The research content for the blog post")

@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.tools import tool
@@ -8,9 +7,6 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_community.tools import ArxivQueryRun
 from langchain_community.utilities import ArxivAPIWrapper
 from langchain.agents import create_agent
-
-
-load_dotenv() 
 
 
 def get_llm(model_name: str = "openai/gpt-oss-20b", temperature: float = 0.5):
@@ -115,9 +111,9 @@ WRITER_PROMPT = ChatPromptTemplate.from_messages([
     }
 ])
 
-def writer_agent(llm: ChatGroq, topic: str, audience: str, research_notes: str, revision_notes: str = "") -> str:
+def writer_agent(llm: ChatGroq, topic: str, audience: str, research_content: str, revision_notes: str = "") -> str:
     """
-    Writer agent that generates a blog post based on the given research notes and target audience.
+    Writer agent that generates a blog post based on the given research content and target audience.
     """
     if revision_notes:
         revision_notes = f"These are the instructions based on the human feedback on previous draft: {revision_notes}. Make sure to follow these properly."
@@ -128,7 +124,7 @@ def writer_agent(llm: ChatGroq, topic: str, audience: str, research_notes: str, 
         {
             "topic": topic,
             "audience": audience,
-            "research": research_notes,
+            "research": research_content,
             "revision_notes": revision_notes
         }
     )
@@ -155,12 +151,13 @@ EDITOR_PROMPT = ChatPromptTemplate.from_messages([
         "role": "user",
         "content": """
             Topic: {topic}
+            Audience: {audience}
             Draft: {draft}
         """
     }
 ])
 
-def editor_agent(llm: ChatGroq, topic: str, draft: str) -> str:
+def editor_agent(llm: ChatGroq, topic: str, audience: str, draft: str) -> str:
     """
     Editor agent that polishes the blog post for final quality control.
     """
@@ -168,6 +165,7 @@ def editor_agent(llm: ChatGroq, topic: str, draft: str) -> str:
     response = chain.invoke(
         {
             "topic": topic,
+            "audience": audience,
             "draft": draft,
         }
     )
