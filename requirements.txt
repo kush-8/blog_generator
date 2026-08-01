@@ -4,4 +4,8 @@ pydantic
 langchain-community
 langchain-groq
 langchain-google-genai
+langchain-core
 dotenv
+wikipedia
+duckduckgo-search
+arxiv

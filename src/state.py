@@ -18,3 +18,7 @@ class BlogState(BaseModel):
 
     # Metadata fields
     revision_count: int = Field(default=0, description="The number of revisions made to the blog post")
+
+class RevisionNotes(BaseModel):
+    approved: bool = Field(description="The approval status of the blog post")
+    notes: str = Field(description="The revision notes provided by the user.")
